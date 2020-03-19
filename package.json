@@ -1,0 +1,90 @@
+{
+  "name": "electron-with-express",
+  "description": "Demonstrates spawning Express from Electron and using it to serve content",
+  "version": "0.10.0",
+  "main": "main.js",
+  "author": "John Chang <pmcheng99@gmail.com>",
+  "license": "GPL-3.0",
+  "scripts": {
+    "start": ".\\node_modules\\node\\bin\\node.exe start-electron.js",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "build_win": "electron-builder --win --x64 -p always",
+    "build_mac": "electron-builder --mac --x64 -p always"
+  },
+  "dependencies": {
+    "config": "^3.2.5",
+    "cookie-parser": "~1.4.4",
+    "cors": "^2.8.5",
+    "debug": "~2.6.9",
+    "delete-empty": "^3.0.0",
+    "ejs": "~2.6.1",
+    "electron-updater": "^4.2.5",
+    "express": "~4.16.1",
+    "fast-xml-parser": "^3.16.0",
+    "form-data": "^3.0.0",
+    "fswin": "^3.19.908",
+    "hashmap": "^2.4.0",
+    "hidefile": "^3.0.0",
+    "http-errors": "~1.6.3",
+    "jquery": "^3.4.1",
+    "keymaster": "^1.6.2",
+    "lodash": "^4.17.15",
+    "md5": "^2.2.1",
+    "mime-types": "^2.1.26",
+    "morgan": "~1.9.1",
+    "multer": "^1.4.2",
+    "node": "^13.6.0",
+    "node-downloader-helper": "^1.0.12",
+    "request": "^2.88.0",
+    "strip": "^3.0.0",
+    "tus-js-client": "^1.8.0",
+    "xmlbuilder": "^14.0.0"
+  },
+  "devDependencies": {
+    "electron": "^7.1.14",
+    "electron-builder": "^22.4.1"
+  },
+  "publish": [
+    {
+      "provider": "github",
+      "owner": "pmcheng99",
+      "repo": "autoUpdatePractice",
+      "private": true
+    }
+  ],
+  "build": {
+    "appId": "com.cilent.app.electronbuild",
+    "productName": "electron-build",
+    "asar": false,
+    "directories": {
+      "output": "build"
+    },
+    "files": [
+      "**/*",
+      "!release-builds"
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "zip"
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "runAfterFinish": true
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pmcheng99/autoUpdatePractice.git"
+  }
+}

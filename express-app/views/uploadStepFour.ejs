@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="zh-tw" xml:lang="zh-tw">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>政府電子採購網</title>
+    <link href="/stylesheets/all.css" rel="stylesheet" type="text/css">
+    <link href="/stylesheets/bootstrap.min.css" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" type="text/css" href="/stylesheets/tab_menu.css" />
+    <link href="/stylesheets/tab.css" rel="stylesheet" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="/stylesheets/my_css.css">
+    <script src="/javascripts/calendar.js"></script>
+    <!--日期-->
+    <script src="/javascripts/jquery-3.3.1.min.js"></script>
+    <!--含式庫-->
+    <script src="/javascripts/tab.js"></script>
+    <!--頁簽-->
+    <script type="text/javascript" src="/javascripts/menu.js"></script>
+    <!--下拉選單-->
+    <script src="/javascripts/bootstrap.min.js" integrity="sha384-wfSDF2E50Y2D1uUdj0O3uMBJnjuUD4Ih7YwaYd1iqfktj0Uod8GCExl3Og8ifwB6" crossorigin="anonymous"></script>  
+</head>
+
+<script>
+    var timeoutID;
+    //document ready
+    $(function () {
+        //畫面被關掉 觸發暫停下載
+        $(window).on("unload", function () {
+            pauseUpload();
+        });
+    });
+
+    function getProgress(){
+        //uploadProgress
+    }
+
+    function doUpload() {
+        console.log('start upload');
+        let url = "http://localhost:3000/docUpload/step4/upload";
+        $.ajax({
+            type: "POST",
+            url: url,
+            contentType: false,
+            processData: false,
+            success: function (res) {
+                console.log(res);
+                //點選上傳後 開始check狀態
+                //timeoutID = window.setInterval((() => checkStatus()), 1000);
+            },
+            error: function (res) {
+                console.log(res);
+            }
+        });
+
+        //像server 取得進度
+        var current_progress = 0;
+        var interval = setInterval(function () {
+            $.ajax({
+            type: "POST",
+            url: "http://localhost:3000/docUpload/step4/uploadProgress",
+            dataType: 'json',
+            success: function (res) {
+                console.log("progress " + res.progress);
+                let progressNum = Number(res.progress);
+                current_progress += progressNum;
+                if(current_progress > 100){
+                    current_progress = 100;
+                }
+            },
+            error: function (res) {
+                console.log("POST uploadProgress error:" + res);
+                clearInterval(interval);
+            }
+        });
+            $("#dynamic")
+                .css("width", current_progress + "%")
+                .attr("aria-valuenow", current_progress)
+                .text(current_progress + "%");
+            if (current_progress >= 100){
+                clearInterval(interval);
+                console.log("上傳完成");
+                $('#sel2_status').html("<option>上傳完成</option>");
+            }
+        }, 1000);
+    }
+
+    function pauseUpload() {
+        console.log('close window, pause upload');
+        let url = "http://localhost:3000/docUpload/step4/pause";
+        $.ajax({
+            type: "POST",
+            url: url,
+            contentType: false,
+            processData: false,
+            success: function (res) {
+                console.log(res);
+                //點選上傳後 開始check狀態
+                //timeoutID = window.setInterval((() => checkStatus()), 1000);
+            },
+            error: function (res) {
+                console.log(res);
+            }
+        });
+    }
+    function resumeUpload() {
+        console.log('close window, pause upload');
+        let url = "http://localhost:3000/docUpload/step4/resume";
+        $.ajax({
+            type: "POST",
+            url: url,
+            contentType: false,
+            processData: false,
+            success: function (res) {
+                console.log(res);
+                //點選上傳後 開始check狀態
+                //timeoutID = window.setInterval((() => checkStatus()), 1000);
+            },
+            error: function (res) {
+                console.log(res);
+            }
+        });
+    }
+
+    function checkStatus() {
+        let url = "http://localhost:3000/status/touch";
+        $.ajax({
+            type: "POST",
+            url: url,
+            contentType: false,
+            processData: false,
+            success: function (res) {
+                // let strRes = String(res);
+                // console.log(strRes);
+                // if(strRes == "end"){
+                //  //TODO 待所有行為操作完呼叫 停止
+                //     console.log(timeoutID + " clear" );
+                //     window.clearInterval(timeoutID);
+                // }else{
+                $('#sel2_status').html(res);
+                //}
+            },
+            error: function (res) {
+                console.log(res);
+            }
+        });
+    }
+
+</script>
+
+<body>
+    <% include header %>
+    <div class="middle_1">
+        <div class="middle_1_cen">
+            <!--中間內容導盲磚-->
+            <a href="#C" id="AC" name="C" title="中間功能區塊" class="guide" accesskey="C">:::</a>
+            <!--主要左邊欄位-->
+            <div class="middle_1_cen_big">
+                <div id="content">
+                    <div class="body">
+                        <h3>步驟4：文件上傳</h3>
+                        <hr>
+                        <!-- 點下去 觸發檔案上傳 回傳上傳進度 Ajax -->
+                        <input id="btnUpload" type="submit" class="btn_1 btn_blue" value="文件上傳" onclick="doUpload()"><br>
+                        <div style="display:none">
+                            <input id="btnPause" type="submit" class="btn_1 btn_blue" value="暫停上傳" onclick="pauseUpload()"><br>
+                            <input id="btnResume" type="submit" class="btn_1 btn_blue" value="繼續上傳" onclick="resumeUpload()"><br>
+                        </div>
+                        <input type="hidden" id="tenderInfo" value="<%= tenderInfo %>">
+                        <br>
+                        文件
+                        <select multiple class="form-control" id="sel2" style="height: 100px">
+                        <% for(let i=0 ; i< fileList.length ; i++){ %>
+                            <option><%= fileList[i] %></option>
+                        <% } %>
+                        </select>
+                        <hr>
+                        文件上傳狀態<br>
+                        <div class="progress">
+                            <div id="dynamic" class="progress-bar progress-bar-success progress-bar-striped active" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="width: 2%">
+                              <span id="current-progress">0%</span>
+                            </div>
+                        </div>
+                        <img src="images/100%.PNG" width="1040" height="23" alt="" />
+                        <select multiple class="form-control" id="sel2_status" style="height: 100px" disabled="disabled">
+                        </select>
+                        <div class="center_btn">
+                            <input type="button" class="btn_1" value="上一頁" onclick="history.go(-1)">
+                            <input type="button" class="btn_1" value="下一頁">
+                            <input type="button" class="btn_1" value="完成">
+                            <input type="button" class="btn_1" value="取消">
+                        </div>
+                    </div>
+                    <!--end of body-->
+                </div>
+                <!--end of content-->
+
+                <div class="h_sp"></div>
+                <!--首頁撐白色用-->
+
+            </div>
+        </div>
+    </div>
+    <% include footer %>
+</body>
+
+</html>

@@ -1,0 +1,209 @@
+<!DOCTYPE HTML>
+<HTML>
+<HEAD>
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" charset="utf-8"/> 
+<script type="text/javascript" src="errorcode.js"></script>
+<SCRIPT type="text/javascript">
+var postTarget;
+var timeoutId;
+
+function postData(target,data)
+{
+	if(!http.sendRequest)
+	{
+		return null;
+	}
+	http.url=target;
+	http.actionMethod="POST";
+	var code=http.sendRequest(data);
+	if(code!=0) return null;
+	return http.responseText;
+
+}
+
+function setOutput(output)
+{
+	var ret=JSON.parse(output);
+	if(ret.ret_code==0x76000031)
+	{
+		alert(window.location.hostname+"非信任網站，請先加入信任網站");
+		return;
+	}
+	// slot 為讀卡機模組相關資訊
+	var slots = ret.slots;
+	// slotDescription 讀卡機資訊
+	var selectSlot = document.getElementById('slotDescription');
+	selectSlot.innerHTML="";
+	for(var index in slots){ 
+		if(slots[index].token instanceof Object){
+			var opt = document.createElement('option');
+			opt.value = slots[index].slotDescription;
+			opt.innerHTML = slots[index].slotDescription+" 卡號:["+slots[index].token.serialNumber+"]";
+			selectSlot.appendChild(opt);
+		}
+	}
+}
+
+function getImageInfo(ctx)
+{
+	var output="";
+	for(i=0;i<2000;i++)
+	{
+		var data=ctx.getImageData(i,0,1,1).data;
+		if(data[2]==0) break;
+		output=output+String.fromCharCode(data[2],data[1],data[0]);
+	}
+	if(output=="") output='{"ret_code": 1979711501,"message": "執行檔錯誤或逾時"}';
+	return output;
+}
+
+function myLoad(){
+	var img = null;
+	var ctx;
+	var output="";
+	var ua = window.navigator.userAgent;
+	if(ua.indexOf("MSIE")==-1 && ua.indexOf("Trident")==-1) //not IE
+	{
+		img=document.createElement("img");
+		img.crossOrigin = "Anonymous";
+		img.src = 'http://localhost:61161/p11Image.bmp';
+		var canvas = document.createElement("canvas");
+		canvas.width=2000;canvas.height=1;
+		ctx = canvas.getContext('2d');
+		
+		img.onload = function() {
+			ctx.drawImage(img, 0, 0);
+			output=getImageInfo(ctx);
+			setOutput(output);
+		};
+		img.onerror = function()
+		{
+			document.getElementById('info').value= "未安裝客戶端程式或未啟動服務";
+		};
+	}else{
+		document.getElementById("httpObject").innerHTML='<OBJECT id="http" width=1 height=1 style="LEFT: 1px; TOP: 1px" type="application/x-httpcomponent" VIEWASTEXT></OBJECT>';
+		output=postData("http://localhost:61161/pkcs11info","");
+		if(output==null){
+			document.getElementById('info').value= "未安裝客戶端程式或未啟動服務";
+			return;
+		}else setOutput(output);
+		
+	}
+	
+}
+function checkFinish(){
+	if(postTarget){
+		postTarget.close();
+		alert("尚未安裝元件");
+	}
+}
+function makeSignature()
+{
+    var ua = window.navigator.userAgent;
+	if(ua.indexOf("MSIE")!=-1 || ua.indexOf("Trident")!=-1) //is IE, use ActiveX
+	{
+		postTarget=window.open("waiting.htm?簽章中", "Signing","height=200, width=200, left=100, top=20");
+		var tbsPackage=getTbsPackage();
+		document.getElementById("httpObject").innerHTML='<OBJECT id="http" width=1 height=1 style="LEFT: 1px; TOP: 1px" type="application/x-httpcomponent" VIEWASTEXT></OBJECT>';
+		var data=postData("http://localhost:61161/sign","tbsPackage="+tbsPackage);
+		postTarget.close();
+		postTarget=null;
+		if(!data) alert("尚未安裝元件");
+		else setSignature(data);
+	}
+	else{
+		//Step 2 window.open http://localhost:61161/popupForm
+		postTarget=window.open("http://localhost:61161/popupForm", "簽章中","height=200, width=200, left=100, top=20");
+		timeoutId=setTimeout(checkFinish,3500);
+	}
+}
+
+function getTbsPackage(){
+	var tbsData = {};
+	tbsData["tbs"]=encodeURIComponent(document.getElementById("tbs").value);
+	tbsData["tbsEncoding"]=document.getElementById("tbsEncoding").value;
+	tbsData["hashAlgorithm"]=document.getElementById("hashAlgorithm").value;
+	tbsData["withCardSN"]=document.getElementById("withCardSN").value;
+	tbsData["slotDescription"]=document.getElementById("slotDescription").value;
+	tbsData["pin"]=encodeURIComponent(document.getElementById("pin").value);
+	tbsData["nonce"]=document.getElementById("nonce").value;
+	tbsData["func"]="MakeSignature";
+	tbsData["signatureType"]="PKCS7";
+	var json = JSON.stringify(tbsData);
+	return json;
+}
+// Step 12 set response
+function setSignature(signature)
+{
+	var ret=JSON.parse(signature);
+	document.getElementById("ResultSignedData").value=ret.signature;
+	document.getElementById("returnCode").value=ret.ret_code;
+	if(ret.ret_code!=0){
+		alert(MajorErrorReason(ret.ret_code));
+		if(ret.last_error)
+			alert(MinorErrorReason(ret.last_error));
+	}
+}
+
+//Step 4 receive message {"func":"getTbs"}
+//Step 11 receive msg func = sign
+function receiveMessage(event)
+{
+	if(console) console.debug(event);
+	
+	//安全起見，這邊應填入網站位址檢查
+	if(event.origin!="http://localhost:61161")
+		return;
+	try{
+		var ret = JSON.parse(event.data);
+		if(ret.func){
+			if(ret.func=="getTbs"){
+				clearTimeout(timeoutId);
+				var json=getTbsPackage()
+				//Step 5 send msg to popupForm
+				postTarget.postMessage(json,"*");
+			}else if(ret.func=="sign"){
+				setSignature(event.data);
+			}
+		}else{
+			if(console) console.error("no func");
+		}
+	}catch(e){
+		//errorhandle
+		if(console) console.error(e);
+	}
+}
+
+if (window.addEventListener) {
+	window.addEventListener("message", receiveMessage, false);
+	}else {
+	//for IE8
+		window.attachEvent("onmessage", receiveMessage);
+	}
+	//for IE8
+var console=console||{"log":function(){}, "debug":function(){}, "error":function(){}};
+</SCRIPT> 
+</HEAD> 
+<BODY onload="myLoad()">
+<span id="httpObject" ></span>
+<H1>PKCS#7簽章範例</H1><br/>
+<BR>tbs:<INPUT name="tbs" id="tbs" value="TBS"/><BR>
+tbsEncoding: <SELECT name="tbsEncoding" id="tbsEncoding"><OPTION value="NONE" selected>NONE</OPTION><OPTION value="base64" >base64</OPTION>	   </SELECT><BR>
+pin: <INPUT name="pin" id="pin" type="password" value="12345678"/><BR>
+hashAlgorithm: <SELECT name="hashAlgorithm" id="hashAlgorithm"><OPTION value="SHA1">SHA1</OPTION>
+  	   <OPTION value="SHA256" selected="">SHA256</OPTION>	   <OPTION value="SHA384">SHA384</OPTION>
+  	   <OPTION value="SHA512">SHA512</OPTION>	   </SELECT><BR>
+nonce: <INPUT name="nonce" id="nonce"/><BR>
+withCardSN: <SELECT name="withCardSN" id="withCardSN"><OPTION value="true">true</OPTION>	   <OPTION value="false" 
+  selected="">false</OPTION>	   </SELECT><BR>
+可用讀卡機：
+<select name="slotDescription" id="slotDescription"></select><br/>
+<!-- Step 1 Call makeSignature()-->
+<INPUT id="MakeSignature" type="button" value="簽章" onclick="makeSignature()"/> <br/>
+
+<FORM name="SignatureForm" action="VerifyPKCS7.jsp" method="POST"> 
+<TEXTAREA name="b64SignedData" readonly="true" id="ResultSignedData" rows="8" cols="65"></TEXTAREA><br/>
+returnCode:<input type="text" name="returnCode" id="returnCode"/><br/>
+<input type="submit" name="submit" value="驗證"/><br/>
+</FORM>
+</BODY></HTML>

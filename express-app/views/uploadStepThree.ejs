@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="zh-tw" xml:lang="zh-tw">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>政府電子採購網</title>
+    <link href="/stylesheets/all.css" rel="stylesheet" type="text/css">
+    <link href="/stylesheets/bootstrap.css" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" type="text/css" href="/stylesheets/tab_menu.css" />
+    <link href="/stylesheets/tab.css" rel="stylesheet" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="/stylesheets/my_css.css">
+    <script src="/javascripts/calendar.js"></script>
+    <!--日期-->
+    <script src="/javascripts/jquery-3.3.1.min.js"></script>
+    <!--含式庫-->
+    <script src="/javascripts/tab.js"></script>
+    <!--頁簽-->
+    <script type="text/javascript" src="/javascripts/menu.js"></script>
+    <!--下拉選單-->
+    <script>
+        var _this = this;
+        var timeoutId;
+        //用來判斷呼叫HiPKI的什麼功能  0是沒有，1是取憑證，2是簽章
+        this.funcCode = 0;
+        this.credentialObj = document.createElement("object");
+        this.credentialObj.type="application/x-htt[component";
+        if (window.addEventListener) {
+            window.addEventListener("message", receiveMessage, false);
+        }
+        // function doDownload() {
+        //     console.log('start download');
+        //     let url = "http://localhost:3000/docUpload/downloadTest";
+        //     $.ajax({
+        //         type : "GET",
+        //         url : url,
+        //         contentType : "application/x-www-form-urlencoded",
+        //         processData : false,
+        //         success : function(res){
+        //             console.log(res);
+        //         },
+        //         error :function(res){
+        //             console.log(res); 
+        //         }
+        //     });
+        // }
+
+        function doSign() {
+            addContent("●開始準備文件清單");
+            this.funcCode = 2;
+            var pin = document.getElementById("pinCode");
+            if (pin.value==="") {
+                window.alert("請輸入憑證密碼");
+                return;
+            }
+            console.log('start sign');
+            var ua = window.navigator.userAgent;
+            var pf = window.navigator.platform;
+            if (pf.indexOf("Mac") != -1 && ua.indexOf("Safari") != -1 && ua.indexOf("Chrome") === -1) {
+                console.log("Mac Safari")
+                this.postTarget = window.open("http://localhost:61161/waiting.gif", "Signing", "height=200, width=200, left=100, top=20");
+                var tbsPackage = getTbsPackage();
+                var data = postData("http://localhost:61161/sign", "tbsPackage=" + tbsPackage);
+                this.postTarget.close();
+                this.postTarget = null;
+                if (data) {
+                    return this.setSignature(data);
+                }
+            }
+            if (ua.indexOf("MSIE") != -1 || ua.indexOf("Trident") != -1) {
+                console.log("IE")
+                var tbsPackage = getTbsPackage();
+                var data = postData("http://localhost:61161/sign", "tbsPackage=" + tbsPackage);
+                if (data) {
+                    return this.setSignature(data);
+                }
+            }
+            else {
+                console.log("else");
+                this.postTarget = window.open("http://localhost:61161/popupForm", "簽章中", "height=200, width=200, left=100, top=20");
+                this.timeoutId = setTimeout(this.checkFinish, 3500);
+            }
+        }
+
+        //取得html加簽相關參數
+        function getTbsPackage(){
+            var tbsData = {};
+            //取憑證
+            if (this.funcCode == 1) {
+                tbsData = { "func": "CheckEnvir" };
+            } 
+            //簽章test
+            else if (this.funcCode == 2) {
+                addContent("●開始簽章");
+                //由XML轉換後的資料
+                // tbsData['tbs'] = encodeURIComponent(document.getElementById("tbs").value);
+                tbsData['tbs'] = "{{xmlData}}";
+                tbsData["tbsEncoding"]="NONE";
+                tbsData["hashAlgorithm"]="SHA256";
+                tbsData["withCardSN"]= false;
+                // tbsData["slotDescription"]=document.getElementById("slotDescription").value;
+                tbsData["pin"]=encodeURIComponent(document.getElementById("pinCode").value);
+                tbsData["nonce"]="";
+                tbsData["func"]="MakeSignature";
+                tbsData["signatureType"]="PKCS7";
+            }
+            var json = JSON.stringify(tbsData);
+            return json;
+        }
+
+        function postData (target, data) {
+            var ua = window.navigator.userAgent;
+            var pf = window.navigator.platform;
+            if (pf.indexOf("Mac") != -1 && ua.indexOf("Safari") != -1) {
+                var xhttp = new XMLHttpRequest();
+                xhttp.open("POST", target, false);
+                xhttp.send(data);
+                return xhttp.responseText;
+            }
+            else {
+                if (!this.credentialObj.sendRequest)
+                    return null;
+                this.credentialObj.url = target;
+                this.credentialObj.actionMethod = "POST";
+                var code = this.credentialObj.sendRequest(data);
+                if (code !== 0)
+                    return null;
+                return this.credentialObj.responseText;
+            }
+        };
+
+        function receiveMessage(event) {
+            console.log('receiveMessage');
+            console.log(event);
+            
+            //安全起見，這邊應填入網站位址檢查
+            if (event.origin !== "http://localhost:61161") {
+                return;
+            }
+
+            try {
+                var ret = JSON.parse(event.data);
+                if (ret.func) {
+                    console.log(ret);
+                    var tbsData = {};
+                    // 打開 hipki popupForm
+                    if (ret.func === "getTbs") {
+                        clearTimeout(timeoutId);
+                        //tbsData.func = "GetUserCert";
+                        var json = getTbsPackage();
+                        console.log(json);
+                        postTarget.postMessage(json, "*");
+                    } else if (ret.func === "pkcs11info") {
+                        addContent("●卡片正常!");
+                    } else if(ret.func === "sign"){
+                        addContent("●簽章完畢");
+                        console.log("Sign result json:");
+                        console.log(event.data);
+                        setSignature(event.data);
+                    }else {
+                        alert("unknown func "+ret.func);
+                    }
+                } else {
+                    if(console) console.error("no func");
+                    alert("no func "+ret.func)
+                }
+            } catch(e) {
+                //errorhandle
+                if(console) console.error(e);
+            }
+        }
+        function setSignature(signature)
+        {
+            var ret=JSON.parse(signature);
+            console.log(ret.signature);
+            //向後端發要求 簽章資料寫入sig檔
+            if(ret.ret_code!=0){
+                alert(ret.ret_code);
+                if(ret.last_error)
+                    alert(ret.last_error);
+            }else
+                writeSig(ret);
+        }
+
+        function writeSig(ret) {
+            console.log('start write Signature');
+            let url = "http://localhost:3000/docUpload/writeSig";
+            $.ajax({
+                type : "POST",
+                url : url,
+                data : ret, 
+                dataType : "json",
+                success : function(res){
+                    console.log(res);
+                },
+                error :function(res){
+                    console.log(res); 
+                }
+            });
+        }
+        function getUserCert() {
+            this.funcCode = 1;
+            var ua = window.navigator.userAgent;
+            // 非 IE
+            if(ua.indexOf("MSIE") === -1 || ua.indexOf("Trident") === -1) {
+                postTarget = window.open("http://localhost:61161/popupForm", "憑證讀取中...", "height=250, width=200, left=100, top=20");
+                timeoutId = setTimeout(checkFinish,3500);
+            }
+            // IE
+            else {
+                //postTarget=window.open("http://localhost:61161/waiting.gif", "Reading","height=200, width=200, left=100, top=20");
+                document.getElementById("httpObject").innerHTML='<OBJECT id="http" width=1 height=1 style="LEFT: 1px; TOP: 1px" type="application/x-httpcomponent" VIEWASTEXT></OBJECT>';
+                var data = postData("http://localhost:61161/pkcs11info?withcert=true","");
+                //postTarget.close();
+                //postTarget=null;
+                if(!data) alert("尚未安裝元件");
+                else setUserCert(data);
+            }
+        }
+        function checkFinish(){
+            if(postTarget){
+                postTarget.close();
+                alert("尚未安裝元件");
+            }
+        }
+        function addContent(msg) {
+            let contentList = document.getElementById("contentList");
+            let line = document.createElement("li");
+            let content = document.createTextNode(msg);
+            line.appendChild(content);
+            contentList.appendChild(line);
+        }
+    </script>
+</head>
+
+<body>
+    <% include header %>
+    <div class="middle_1">
+        <div class="middle_1_cen">
+            <!--中間內容導盲磚-->
+            <a href="#C" id="AC" name="C" title="中間功能區塊" class="guide" accesskey="C">:::</a>
+            <!--主要左邊欄位-->
+            <div class="middle_1_cen_big">
+                <div id="content">
+                    <div class="body">
+                        <h3>步驟3：文件簽章</h3>
+                        <span id="httpObject"></span>
+                        <hr>
+                        請插入政府採購IC卡並輸入PIN碼 <input type="password" id="pinCode" style="padding: 5px;">
+                        <input type="button" class="btn_1  btn_right" value="採購IC卡狀態確認" onclick="getUserCert()"><br>
+                        <input type="button" class="btn_1 btn_blue" id="signbtn" value="文件簽章" onclick="doSign()">&nbsp;&nbsp; 進度 &nbsp;
+                        <img src="images/100%.PNG" width="920" height="23" alt="" /><br>
+                        <hr>
+                        註：◎若您的密碼少於6碼(需6~8碼)，請先至所屬憑證管理中心(GCA或XCA)，「憑證及IC卡相關作業」→「更改PIN碼」修改密碼，謝謝！<br>
+                        上次簽章時間<br>
+                        簽章狀態<br>
+                        <div class="border">
+                            <ul id="contentList">
+                                <li>●已就緒</li>
+                                <!-- <li>●開始準備文件清單</li>
+                                <li>●加入檔案：123.txt</li>
+                                <li>●文件清單製作完成，共1個檔案</li>
+                                <li>●取得加密憑證</li>
+                                <li>●取得加密憑證完成</li>
+                                <li>●簽章清單檔案</li>
+                                <li>●產生已簽章清單檔案0923_01.sig</li>
+                                <li>●文件簽章完成</li> -->
+                            </ul>
+                        </div><br>
+                        <form action="/docUpload/step4" method="POST">
+                        <div class="center_btn">
+                            <input type="button" class="btn_1" value="＜上一頁" onclick="history.go(-1);">
+                            <input type="submit" class="btn_1" value="下一頁＞">
+                            <input type="button" class="btn_1" value="完成">
+                            <input type="button" class="btn_1" value="取消">
+                        </div>
+                        </form>
+                    </div>
+                    <!--end of body-->
+                </div>
+                <!--end of content-->
+                <div class="h_sp"></div>
+                <!--首頁撐白色用-->
+            </div>
+        </div>
+        <form action="/docUpload/step4" method="POST">
+			<input type="submit" value="測試(第四頁)"/>
+		</form>
+        <!--主要左邊欄位END-->
+        <script>
+            function javaTest() {
+                let startTime = new Date();
+                console.log(startTime.getMinutes() + ":" + startTime.getSeconds() + "." + startTime.getMilliseconds());
+                let url = "http://localhost:3000/docUpload/javaTest";
+                $.ajax({
+                    type : "POST",
+                    url: url,
+                    dataType: "json",
+                    success : function(res){
+                        console.log(startTime.getMinutes()+":"+startTime.getSeconds() + "." + startTime.getMilliseconds());
+                        console.log(res);
+                    },
+                    error :function(res){
+                        console.log(startTime.getMinutes()+":"+startTime.getSeconds() + "." + startTime.getMilliseconds());
+                        console.log(res);
+                    }
+                });
+            }
+        </script>
+        <% include footer %>
+</body>
+
+</html>
